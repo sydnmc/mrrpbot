@@ -1,0 +1,7 @@
+{
+	"token":"your discord token",
+	"clientId":"your client id",
+	"guildId":"your test server's id",
+	"embedColor":"#7D6D78",
+	"cacheWriteFrequency":60000
+}
