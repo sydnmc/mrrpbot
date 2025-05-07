@@ -1,16 +1,17 @@
 //these are a list of things the bot can respond with, not actually things that it's searching for. see regex expression below
 var nyaList = ['mrrp', 'mrrrp', 'mrrrrp', 'mrrrrrp', 'meow', 'nya', 'mrow', 'mrrow', 'mrrrow', 'mrrrrow', 'mew', 'purr', 'purrr', 'purrrr', 'purrrrr']; 
-var nyaKaomoji = [' :3', ' >w<', ' >_<', ' >_<;;', ' >.<', ' (๑╹ω╹๑ )'];
+var nyaKaomoji = [' :3', ' >w<', ' >_<', ' >_<;;', ' >.<', ' (๑╹ω╹๑ )', ' ^^'];
+var unsureList = ['um,, ', 'uhh.. ', 'ettooo,. ']; //adds more responses for other animals (foxes and rabbits for now) - anne <3
 
 //these are the things that the bot actually matches to, woofList is an array of strings but the other two are arrays of regexes
 var woofList = ['wan', 'woof', 'bark', 'arf'];
 var nyaMatch = [/^(m(r{2,})p)/, /^(m(e+)(o+)w)/, /^(pu(r{2,}))/, /^(mew)/, /^(nya)/];
 var yellingNyaMatch = [/^(M(R{2,})P)/, /^(M(E+)(O+)W)/, /^(PU(R{2,}))/, /^(MEW)/, /^(NYA)/];
 
-function validMeow(isFox) {
+function validMeow(isOtherAnimal) {
 	let meowBack = nyaList[Math.floor(Math.random()*nyaList.length)]; //random selection of meow, but is sometimes the same (i think its fine tho :3)
 
-	if (isFox) { meowBack = "um,, "+meowBack; }
+	if (isOtherAnimal) { meowBack = unsureList[Math.floor(Math.random()*unsureList.length)]+meowBack; } //gets a random response from the unsurelist - anne
 
 	let randomAdditions = Math.random();
 	if (randomAdditions >= (2/3)) {
@@ -52,7 +53,15 @@ function meowHandler(client, message) {
 	}
 
 	if (meowMessage.startsWith('kon')) {
-		return message.channel.send(validMeow(true))
+		return message.channel.send(validMeow(true));
+	} else if (meowMessage.startsWith('KON')) {
+		return message.channel.send(`${unsureList[Math.floor(Math.random()*unsureList.length)]} too loud >.<!!`); //foxes are a little scarier so thats why shes responding with !! - anne
+	}
+
+	if (/^(py(o+)n)/.test(meowMessage)) {
+		return message.channel.send(validMeow(true));
+	} else if ((/^(PY(O+)N)/.test(meowMessage))) {
+		return message.channel.send(`${unsureList[Math.floor(Math.random()*unsureList.length)]} too loud >.<~~`); //bunnies are really really soft... so shes confused but very calm, hence the ~~ - anne
 	}
 }
 
