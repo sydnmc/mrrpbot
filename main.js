@@ -1,3 +1,7 @@
+/* websocket stuff - used for opening a connection with the flandre server :3 */
+const WebSocket = require('ws');
+const flanbridge = new WebSocket('ws://127.0.0.1:6767');
+
 /* discord.js imports */
 const { Client, Events, GatewayIntentBits, Partials, Collection, EmbedBuilder, MessageFlags } = require('discord.js');
 const fs = require('fs');
@@ -45,7 +49,7 @@ function formatMessage(msg) {
 	if (msg.attachments.first()) {
 		attachUrl = msg.attachments.first().attachment;
 	}
-	let formattedMessage = { 
+	let formattedMessage = {
 		channelId: msg.channelId,
 		guildId: msg.guildId,
 		id: msg.id,
@@ -73,7 +77,7 @@ async function storeServerMessages(curGuildId, guildName) {
 				let message = await channel.messages
 				.fetch({ limit: 1 }) //only fetches that one message
 				.then(messagePage => (messagePage.size === 1 ? messagePage.at(0) : null)); //ion really get allat
-	
+
 				while (message) {
 					await channel.messages
 					  .fetch({ limit: 100, before: message.id })
@@ -86,11 +90,11 @@ async function storeServerMessages(curGuildId, guildName) {
 						message = 0 < messagePage.size ? messagePage.at(messagePage.size - 1) : null;
 					});
 				}
-		
+
 				if (!fs.existsSync(`./messagecache/${channel.guild.name}`)) {
 					fs.mkdirSync(`./messagecache/${channel.guild.name}`, { recursive: true });
 				}
-	
+
 				fs.writeFile(`./messagecache/${channel.guild.name}/${channel.id}.json`, JSON.stringify(messages, null, 2), function (err) {
 					if (err) console.log(err);
 					console.log(`wrote ${messages.length} messages to ${channel.guild.name}'s #${channel.name}.json >w<`)
@@ -128,7 +132,7 @@ function updateCacheWhileRunning(message, isReaction, emoji) {
 					currentChannelData.push(message);
 				}
 			});
-		
+
 			let guildDirectory = `./messagecache/${message.guild.name}`;
 			if (!fs.existsSync(guildDirectory)) {
 				fs.mkdirSync(guildDirectory, { recursive: true }); //if the server directory doesn't already exist, we wanna make it :p
@@ -162,8 +166,34 @@ function updateCacheWhileRunning(message, isReaction, emoji) {
 	}
 }
 
+var waitingForAccept = false;
+
+flanbridge.on('open', () => {
+  console.log("connected to flanstore's websocket :O she's so cute,,");
+});
+
+flanbridge.on('close', () => {
+  console.log("disconnected from flanstore's websocket ;w; mouu.., ");
+});
+
 client.once(Events.ClientReady, readyClient => {
 	console.log(`poke poke,, logged in on ${readyClient.user.tag} >w< nya~?`);
+
+ flanbridge.on('message', message => {
+    message = JSON.parse(message);
+    if (message.type === "userAdd") {
+      let userCreateEmbed = new EmbedBuilder()
+		.setTitle("new user wants to join flanstore!! :0")
+		.setColor("#c17342")
+		.addFields(
+			{name: 'discord handle', value: `@${message.userDiscord}`},
+			{name: 'subdomain', value: message.subdomain}
+		)
+      client.users.send('245588170903781377', { embeds: [userCreateEmbed] }); //i'd like to add a pfp option in flanstore before you sign up ^-^
+      client.users.send('245588170903781377', "would you like to accept this user? type YES to affirm");
+      waitingForAccept = true;
+    }
+  });
 });
 
 client.on(Events.MessageCreate, async message => {
@@ -171,7 +201,7 @@ client.on(Events.MessageCreate, async message => {
 	updateCacheWhileRunning(message, false);
 	if (message.author.bot) return false; //if we get a message from a bot (either ourselves or another bot like pluralkit), ignore for commands
 
-	//message.channel.send('pemdas strikes fear in the hearts of many.');	
+	//message.channel.send('pemdas strikes fear in the hearts of many.');
 
 	/* fronting!! :3 */
 	//works in a different file >_<
