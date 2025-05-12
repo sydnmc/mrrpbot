@@ -63,6 +63,12 @@ function meowHandler(client, message) {
 	} else if ((/^(PY(O+)N)/.test(meowMessage))) {
 		return message.channel.send(`${unsureList[Math.floor(Math.random()*unsureList.length)]} too loud >.<~~`); //bunnies are really really soft... so shes confused but very calm, hence the ~~ - anne
 	}
+
+	if (/^(gy(u+))/.test(meowMessage)) {
+		return message.channel.send(`${unsureList[Math.floor(Math.random()*unsureList.length)]} water puppy,.? d-dont get water on me >_<~!! hiss~!!!`); //seals are a little scary because they can get you all wet.. - anne
+	} else if ((/^(GY(U+))/.test(meowMessage))) {
+		return message.channel.send("st-stop splashing water on me,~!! hisss!!!! >.< ");
+	}
 }
 
 module.exports = {
