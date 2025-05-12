@@ -2,8 +2,14 @@
 const WebSocket = require('ws');
 const flanbridge = new WebSocket('ws://127.0.0.1:6767');
 
+/* things used to download files in order to send them to flanstore~ */
+const axios = require('axios');
+const FormData = require('form-data');
+const { Readable } = require('stream');
+const flanstoreEndpoint = 'http://localhost:1402'; //since we're running on the same server~
+
 /* discord.js imports */
-const { Client, Events, GatewayIntentBits, Partials, Collection, EmbedBuilder, MessageFlags } = require('discord.js');
+const { Client, Events, GatewayIntentBits, Partials, Collection, EmbedBuilder, MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const fs = require('fs');
 
 const { token, embedColor, cacheWriteFrequency } = require('./config.json');
@@ -13,6 +19,7 @@ const { meowHandler } = require('./meowhandler.js');
 const { readServerChannels } = require('./readchannels.js');
 const { randomQuote } = require('./commands/quote.js');
 const { helpMessage } = require('./commands/help.js');
+const { uploadFile } = require('./commands/upload.js');
 
 const client = new Client({
     intents: [
@@ -136,7 +143,7 @@ function updateCacheWhileRunning(message, isReaction, emoji) {
 			let guildDirectory = `./messagecache/${message.guild.name}`;
 			if (!fs.existsSync(guildDirectory)) {
 				fs.mkdirSync(guildDirectory, { recursive: true }); //if the server directory doesn't already exist, we wanna make it :p
-			  }
+			}
 			fs.writeFile(fileName, JSON.stringify(currentChannelData, null, 2), (err) => {
 				if (err) throw err;
 				console.log(`updated cache for ${message.guild.name}'s #${message.channel.name} with new messages >w<`);
@@ -166,7 +173,8 @@ function updateCacheWhileRunning(message, isReaction, emoji) {
 	}
 }
 
-var waitingForAccept = false;
+var currentlyOpenButtons = 0;
+var userStorage = [];
 
 flanbridge.on('open', () => {
   console.log("connected to flanstore's websocket :O she's so cute,,");
@@ -179,29 +187,38 @@ flanbridge.on('close', () => {
 client.once(Events.ClientReady, readyClient => {
 	console.log(`poke poke,, logged in on ${readyClient.user.tag} >w< nya~?`);
 
- flanbridge.on('message', message => {
+  flanbridge.on('message', message => {
     message = JSON.parse(message);
     if (message.type === "userAdd") {
       let userCreateEmbed = new EmbedBuilder()
-		.setTitle("new user wants to join flanstore!! :0")
-		.setColor("#c17342")
-		.addFields(
-			{name: 'discord handle', value: `@${message.userDiscord}`},
-			{name: 'subdomain', value: message.subdomain}
-		)
-      client.users.send('245588170903781377', { embeds: [userCreateEmbed] }); //i'd like to add a pfp option in flanstore before you sign up ^-^
-      client.users.send('245588170903781377', "would you like to accept this user? type YES to affirm");
-      waitingForAccept = true;
-    }
-  });
+        .setTitle("new user wants to join flanstore!! :0")
+        .setColor("#c17342")
+        .addFields(
+          {name: 'discord handle', value: `@${message.userDiscord}`},
+          {name: 'subdomain', value: message.subdomain}
+        )
+
+        let acceptButton = new ButtonBuilder()
+          .setCustomId('accept-'+currentlyOpenButtons) //makes it so we can always keep track of how many buttons are open :3
+          .setLabel('accept >w<')
+          .setStyle(ButtonStyle.Success)
+        let denyButton = new ButtonBuilder()
+          .setCustomId('deny-'+currentlyOpenButtons)
+          .setLabel('deny ;w;')
+          .setStyle(ButtonStyle.Danger)
+        currentlyOpenButtons++;
+        userStorage.push(message);
+
+        let buttonRow = new ActionRowBuilder().addComponents(acceptButton, denyButton);
+        client.users.send('245588170903781377', { embeds: [userCreateEmbed], components: [buttonRow] }); //i'd like to add a pfp option in flanstore before you sign up ^-^
+      }
+    });
 });
 
 client.on(Events.MessageCreate, async message => {
 	//even if we don't have any commands, we still wanna write it to the cache!! :3
 	updateCacheWhileRunning(message, false);
 	if (message.author.bot) return false; //if we get a message from a bot (either ourselves or another bot like pluralkit), ignore for commands
-
-	//message.channel.send('pemdas strikes fear in the hearts of many.');
 
 	/* fronting!! :3 */
 	//works in a different file >_<
@@ -244,6 +261,32 @@ client.on(Events.MessageCreate, async message => {
 	//works in a different file >_<
 	if (message.content == '?help') {
 		helpMessage(message.channel, false);
+	}
+
+	/* uploading :OO */
+	//works in a different file >_<
+	if (message.content == '?upload') {
+		let fileUploadInfo = uploadFile(message, false); //this returns a fileUrl, from which we can poke poke the flanstore api >w<
+		let { data: fileBuffer } = await axios.get(fileUploadInfo.fileUrl, { responseType: 'arraybuffer', }); //returns a buffer of the file from the url using axios :3
+
+		//with that file buffer, we need to (unfortunately) send a FormData...
+    let file = new FormData();
+    file.append('file', fileBuffer, {
+      filename: fileUploadInfo.fileName,
+      contentType: 'application/octet-stream',
+      knownLength: fileBuffer.length
+    });
+    file.pipe(fs.createWriteStream('./test-upload.txt'));
+    file.on('end', () => console.log('form finished'));
+
+		let flanstoreUrl = await axios.post(`${flanstoreEndpoint}/upload`, file, {
+          headers: {
+            ...file.getHeaders(), //adds silly headers from the form
+            'Authorization': fileUploadInfo.apiKey,
+            'X-User': fileUploadInfo.user
+          }
+    });
+    return message.channel.send(`uploaded file successfully~ >w< here's the link,,: ${flanstoreUrl}`); //still broken on the backend
 	}
 
 	/* message caching */
@@ -333,7 +376,22 @@ client.on(Events.MessageReactionAdd, async (reaction) => {
 });
 
 client.on(Events.InteractionCreate, async interaction => {
-	if (!interaction.isChatInputCommand()) return;
+  if (interaction.isButton()) { //accept/deny buttons for flanstore
+    await interaction.deferReply(); //we need to let discord know that we got their interaction, we're just gonna reply in a sec :3
+    for (let i = 0; i < currentlyOpenButtons; i++) {
+      if (interaction.customId === 'accept-'+i) {
+          flanbridge.send(JSON.stringify({ "type": "userAdd", "userInfo": userStorage[i], "result": "accept" }));
+          await interaction.editReply('got it!! >w< user added~ just make sure to set up their cloudflare tunnel + DNS settings for yuru.ca too, okay~,,?');
+      } else { //only other option is deny, and using the customId seems to break things somehow :O
+          flanbridge.send(JSON.stringify({ "type": "userAdd", "result": "deny" })); //we don't exactly need to send over a deny, but it's good to have anyways ^-^
+          await interaction.editReply("o-okay,, :c i won't accept this user..,");
+      }
+      currentlyOpenButtons--;
+      userStorage.splice(i, 1); //removes the user from storage too
+    }
+  }
+
+	if (!interaction.isChatInputCommand()) return; //if it's not a chat input command now, then we don't need it :3
 	let command = interaction.client.commands.get(interaction.commandName);
 
 	if (!command) {

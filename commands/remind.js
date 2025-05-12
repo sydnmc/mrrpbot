@@ -48,17 +48,15 @@ function remind(userInteraction, isSlash) {
 
 		for (let i = 0; i < checkList.length; i++) {
 			let curMultiplier = multiplierList[i];
-			let regex = checkList[i]; 
+			let regex = checkList[i];
 			if (regex.test(reminder)) {
 				waitTime = waitTime + BigInt(parseInt(reminder.match(regex)[0].match(numMatch)[0]))*curMultiplier;
 				reminderContent = reminder.split(reminder.match(regex)[0])[1]; //sets reminder content to everything after the current time match
 			}
 		}
-		
+
 		let timeOnMessage = Date.now();
 		let futureTimestamp = Math.ceil(timeOnMessage/1000) + Number(waitTime);
-		console.log(waitTime);
-		console.log(reminderContent);
 		let initialRemind = new EmbedBuilder()
 		.setTitle(`gotcha >w<`)
 		.setDescription(`ill remind you <t:${futureTimestamp}:R> to ${reminderContent}!! :3`)
@@ -71,7 +69,6 @@ function remind(userInteraction, isSlash) {
 		}
 
 		if (waitTime*BigInt(1000) < intLimit) {
-			console.log('we in this bitch')
 			setTimeout(() => sendReminder(userInteraction, timeOnMessage, reminderContent, isSlash), Number(waitTime)*1000);
 		} else {
 			let remindTimestamp = new Date(Number(waitTime*BigInt(1000) + BigInt(timeOnMessage)));

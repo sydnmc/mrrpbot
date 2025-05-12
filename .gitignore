@@ -3,4 +3,5 @@ node_modules
 package-lock.json
 package.json
 messagecache
+usercache
 deployslash.js
