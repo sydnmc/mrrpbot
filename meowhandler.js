@@ -74,7 +74,7 @@ function meowHandler(client, message) {
 
 	let wonderArrayNum = 0;
 	while (wonderArrayNum < wonderhoyMatch.length) {
-		if (meowMessage.toLowerCase().includes(wonderhoyMatch[WonderArrayNum])) {
+		if (meowMessage.toLowerCase().includes(wonderhoyMatch[wonderArrayNum])) {
 			return message.channel.send(wonderlist[Math.floor(Math.random()*wonderlist.length)]);
 		}
 		wonderArrayNum++;
