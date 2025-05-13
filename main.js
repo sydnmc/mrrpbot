@@ -177,42 +177,46 @@ var currentlyOpenButtons = 0;
 var userStorage = [];
 
 flanbridge.on('open', () => {
-  console.log("connected to flanstore's websocket :O she's so cute,,");
+	console.log("connected to flanstore's websocket :O she's so cute,,");
 });
 
 flanbridge.on('close', () => {
   console.log("disconnected from flanstore's websocket ;w; mouu.., ");
 });
 
+flanbridge.on('error', () => {
+	console.log(`\x1b[33ms-something went wrong with the flanbridge,, this could be because you launched me without her!! >_<\x1b[0m`);
+})
+
 client.once(Events.ClientReady, readyClient => {
 	console.log(`poke poke,, logged in on ${readyClient.user.tag} >w< nya~?`);
 
   flanbridge.on('message', message => {
-    message = JSON.parse(message);
-    if (message.type === "userAdd") {
-      let userCreateEmbed = new EmbedBuilder()
-        .setTitle("new user wants to join flanstore!! :0")
-        .setColor("#c17342")
-        .addFields(
-          {name: 'discord handle', value: `@${message.userDiscord}`},
-          {name: 'subdomain', value: message.subdomain}
-        )
+	message = JSON.parse(message);
+	if (message.type === "userAdd") {
+	  let userCreateEmbed = new EmbedBuilder()
+		.setTitle("new user wants to join flanstore!! :0")
+		.setColor("#c17342")
+		.addFields(
+		  {name: 'discord handle', value: `@${message.userDiscord}`},
+		  {name: 'subdomain', value: message.subdomain}
+		)
 
-        let acceptButton = new ButtonBuilder()
-          .setCustomId('accept-'+currentlyOpenButtons) //makes it so we can always keep track of how many buttons are open :3
-          .setLabel('accept >w<')
-          .setStyle(ButtonStyle.Success)
-        let denyButton = new ButtonBuilder()
-          .setCustomId('deny-'+currentlyOpenButtons)
-          .setLabel('deny ;w;')
-          .setStyle(ButtonStyle.Danger)
-        currentlyOpenButtons++;
-        userStorage.push(message);
+		let acceptButton = new ButtonBuilder()
+		  .setCustomId('accept-'+currentlyOpenButtons) //makes it so we can always keep track of how many buttons are open :3
+		  .setLabel('accept >w<')
+		  .setStyle(ButtonStyle.Success)
+		let denyButton = new ButtonBuilder()
+		  .setCustomId('deny-'+currentlyOpenButtons)
+		  .setLabel('deny ;w;')
+		  .setStyle(ButtonStyle.Danger)
+		currentlyOpenButtons++;
+		userStorage.push(message);
 
-        let buttonRow = new ActionRowBuilder().addComponents(acceptButton, denyButton);
-        client.users.send('245588170903781377', { embeds: [userCreateEmbed], components: [buttonRow] }); //i'd like to add a pfp option in flanstore before you sign up ^-^
-      }
-    });
+		let buttonRow = new ActionRowBuilder().addComponents(acceptButton, denyButton);
+		client.users.send('245588170903781377', { embeds: [userCreateEmbed], components: [buttonRow] }); //i'd like to add a pfp option in flanstore before you sign up ^-^
+	  }
+	});
 });
 
 client.on(Events.MessageCreate, async message => {
