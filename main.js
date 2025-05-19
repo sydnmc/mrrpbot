@@ -358,7 +358,7 @@ client.on(Events.MessageCreate, async message => {
 		switch (pingMessage) {
 			case '':
 				return message.channel.send('h-hai..,?');
-			case 'chu~':
+			case ' chu~':
 				return message.channel.send('awawawa ><');
 		}
 	}
