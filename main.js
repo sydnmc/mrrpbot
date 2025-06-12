@@ -1,6 +1,11 @@
-/* websocket stuff - used for opening a connection with the flandre server :3 */
+/* websocket stuff - used for opening a connection with flanstore + yuru.ca backend :3 */
 const WebSocket = require('ws');
 const flanbridge = new WebSocket('ws://127.0.0.1:6767');
+const yurubridge = new WebSocket('ws://127.0.0.1:7676');
+const serverConnections = [
+  { "name": "flanbridge", "socketData": flanbridge },
+  { "name": "yurubridge", "socketData": yurubridge }
+];
 
 /* things used to download files in order to send them to flanstore~ */
 const axios = require('axios');
@@ -9,7 +14,7 @@ const { Readable } = require('stream');
 const flanstoreEndpoint = 'http://localhost:1402'; //since we're running on the same server~
 
 /* discord.js imports */
-const { Client, Events, GatewayIntentBits, Partials, Collection, EmbedBuilder, MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { Client, Events, GatewayIntentBits, Partials, Collection, EmbedBuilder, MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder } = require('discord.js');
 const fs = require('fs');
 
 const { token, embedColor, cacheWriteFrequency } = require('./config.json');
@@ -20,6 +25,8 @@ const { readServerChannels } = require('./readchannels.js');
 const { randomQuote } = require('./commands/quote.js');
 const { helpMessage } = require('./commands/help.js');
 const { uploadFile } = require('./commands/upload.js');
+const { doDiffLogic, addDiff } = require('./commands/diff.js');
+
 
 const client = new Client({
     intents: [
@@ -34,6 +41,7 @@ const client = new Client({
 });
 
 var cacheRestartPrimed = false;
+var editDiffPrimed = false;
 
 client.commands = new Collection();
 
@@ -176,17 +184,19 @@ function updateCacheWhileRunning(message, isReaction, emoji) {
 var currentlyOpenButtons = 0;
 var userStorage = [];
 
-flanbridge.on('open', () => {
-	console.log("connected to flanstore's websocket :O she's so cute,,");
-});
+for (let i = 0; i < serverConnections.length; i++) {
+  serverConnections[i].socketData.on('open', () => {
+    console.log(`connected to ${serverConnections[i].name} :0 she's so cute,,`);
+  });
 
-flanbridge.on('close', () => {
-  console.log("disconnected from flanstore's websocket ;w; mouu.., ");
-});
+  serverConnections[i].socketData.on('close', () => {
+    console.log(`disconnected from ${serverConnections[i].name} ;w; mouu.., `);
+  });
 
-flanbridge.on('error', () => {
-	console.log(`\x1b[33ms-something went wrong with the flanbridge,, this could be because you launched me without her!! >_<\x1b[0m`);
-})
+  serverConnections[i].socketData.on('error', () => {
+    console.log(`\x1b[33ms-something went wrong with ${serverConnections[i].name},, this could be because you launched me without her!! >_<;;\x1b[0m`);
+  });
+}
 
 client.once(Events.ClientReady, readyClient => {
 	console.log(`poke poke,, logged in on ${readyClient.user.tag} >w< nya~?`);
@@ -218,6 +228,99 @@ client.once(Events.ClientReady, readyClient => {
 	  }
 	});
 });
+
+var curMap = {};
+var curEditApiData = [];
+var curEditDiff = {};
+var curEditDiffIndex;
+
+function followupYuruMessage(diffChannel) {
+  yurubridge.on('message', message => {
+    let parsedMessage = JSON.parse(message);
+    let diffname;
+    let colour;
+    if (!parsedMessage.diffname) { //we also don't have a diff colour if this is the case~
+      diffname = 'not set yet >_<;;';
+      colour = embedColor; //stupid sydney with color and not colour,,
+    } else {
+      diffname = `${parsedMessage.diffname} (${parsedMessage.sr} stars)`;
+      colour = parsedMessage.colour;
+    }
+
+    let diffEmbed = new EmbedBuilder()
+		.setTitle("is this right? :0")
+		.setColor(colour)
+		.setImage(parsedMessage.bgLink)
+		.addFields(
+		  {name: 'song', value: `${parsedMessage.artist} - ${parsedMessage.title}`},
+		  {name: 'diff', value: diffname},
+			{name: 'mapper', value: parsedMessage.mapper},
+			{name: 'status', value: parsedMessage.status}
+		)
+
+		let acceptButtonLilac = new ButtonBuilder()
+		  .setCustomId('accept-map-lilac') //should only be 1 open at a time, since we're not gonna be spamming maps ehe
+		  .setLabel("+ -> lilac's site~! <3")
+		  .setStyle(ButtonStyle.Success)
+		let acceptButtonSydney = new ButtonBuilder()
+		  .setCustomId('accept-map-sydney')
+		  .setLabel("+ -> sydney's site~! <3")
+		  .setStyle(ButtonStyle.Success)
+		let editButton = new ButtonBuilder()
+		  .setCustomId('edit-map')
+		  .setLabel('edit :0')
+		  .setStyle(ButtonStyle.Primary)
+		let cancelButton = new ButtonBuilder()
+		  .setCustomId('cancel-map')
+		  .setLabel('cancel ;w;')
+		  .setStyle(ButtonStyle.Danger)
+		let buttonRow = new ActionRowBuilder().addComponents(acceptButtonLilac, acceptButtonSydney, editButton, cancelButton);
+
+    curMap = parsedMessage;
+    return diffChannel.send({ embeds: [diffEmbed], components: [buttonRow] });
+  });
+}
+
+function followupEditYuruMessage(channel, siteInfo, type, page) {
+  curEditApiData = siteInfo;
+
+  let options = [];
+  for (let i = 0; i < siteInfo.length; i++) {
+    if (type === "gds") {
+      for (let j = 0; j < siteInfo[i].difficulties.length; j++) { //we can have multiple difficulties in one map~
+        options.push(new StringSelectMenuOptionBuilder()
+          .setLabel(`${siteInfo[i].songName} by ${siteInfo[i].mapper}`)
+          .setDescription(`${siteInfo[i].diffname}`) //needs a string here
+          .setValue(`diff-${i}-${j}`))
+      }
+    } else if (type === "sets") {
+      options.push(new StringSelectMenuOptionBuilder()
+        .setLabel(`${siteInfo[i].setTitle}`)
+        .setValue(`set-${i}`))
+    }
+  }
+
+  let optLen = options.length;
+  let pageEnd = optLen;
+  let pageStart = 0;
+  if (optLen > 25) {
+    pageEnd = page * 25;
+    pageStart = (page - 1) * 25;
+    if (pageEnd > options.length) { //if we exceed the bounds of the array with the page (page is less than 25 long)
+      pageEnd = options.length;
+    }
+
+    options = options.slice(pageStart, pageEnd);
+  }
+
+  let mapSelect = new StringSelectMenuBuilder()
+			.setCustomId(`${type}-selection`)
+			.setPlaceholder('select a diff to edit~')
+			.addOptions(options)
+  let selectRow = new ActionRowBuilder().addComponents(mapSelect);
+
+	return channel.send({ content: `(displaying ${type} ${pageStart}-${pageEnd}, out of a total ${optLen})`, components: [selectRow] });
+}
 
 client.on(Events.MessageCreate, async message => {
 	//even if we don't have any commands, we still wanna write it to the cache!! :3
@@ -293,6 +396,82 @@ client.on(Events.MessageCreate, async message => {
     return message.channel.send(`uploaded file successfully~ >w< here's the link,,: ${flanstoreUrl}`); //still broken on the backend
 	}
 
+	/* diff modification >_<!! */
+	//partially works in a different file :O slash commands do, at least,,
+	if (message.content.startsWith('?site ')) {
+    userParams = message.content.split('?site ')[1];
+    if (message.author.id === "245588170903781377") { //lilac~
+      if (!userParams) {
+        return message.channel.send('y-you need to specify what action to do >_<;;');
+      } else if (userParams.startsWith('diffadd')) {
+        let diffLink = userParams.split('diffadd ')[1];
+        yurubridge.send(JSON.stringify({ "link": diffLink, "type": "diff" }));
+        followupYuruMessage(message.channel); //will wait for yuru.ca to get back to us, and follow up in a later message~
+        return;
+      } else if (userParams.startsWith('setadd')) {
+        let setLink = userParams.split('setadd ')[1];
+        yurubridge.send(JSON.stringify({ "link": setLink, "type": "set" }));
+        followupYuruMessage(message.channel);
+        return;
+      } else if (userParams.startsWith('diffedit')) { //each of these should grab their respective info from api.yuru.ca :3
+        let siteInfo;
+        if (userParams.includes('lilac') || userParams.includes('sydney')) {
+          let person;
+          if (userParams.includes('sydney')) {
+            person = 'sydney';
+            userParams = userParams.split('sydney')[1];
+          } else if (userParams.includes('lilac')) {
+            person = 'lilac';
+            userParams = userParams.split('lilac')[1];
+          }
+
+          let yuruApiInfo = await fetch(`https://api.yuru.ca/gds?person=${person}`);
+          siteInfo = await yuruApiInfo.json();
+
+          let page = 1;
+          if (userParams) { //splitting normally with nothing else, we get an empty string - but otherwise, we should get " num"
+            page = parseInt(userParams.substring(1));
+          }
+
+          followupEditYuruMessage(message.channel, siteInfo, "gds", page);
+          return;
+        } else {
+          return message.channel.send(`l-looks like you didn't include which user to edit gds for,, >_<;;`);
+        }
+      } else if (userParams.startsWith('setedit')) {
+        let yuruApiInfo = await fetch(`https://api.yuru.ca/sets`);
+        siteInfo = await yuruApiInfo.json();
+
+        let page = 1;
+        userParams = userParams.split('setedit')[1]
+        if (userParams) {
+          page = parseInt(userParams.substring(1));
+        }
+
+        followupEditYuruMessage(message.channel, siteInfo, "sets", page);
+      }
+    } else {
+      return message.channel.send(`i'm sorry, but,, i don't trust you to edit things on yuru.ca >.< only lilac and sydney can,, >_<;;`);
+    }
+	}
+
+  if (editDiffPrimed && message.author.id === "245588170903781377" && message.content.startsWith(';edit')) {
+    //let's enter edit mode~ :D
+    try {
+      let userParams = message.content.split(';edit ')[1];
+      let editNum = parseInt(userParams.split(' ')[0]);
+      let editValue = userParams.split(' ')[1];
+
+      switch (editNum) {
+        case 1:
+          curEditDiff.difficulties[curEditDiffIndex] = editValue;
+          break;
+      }
+    } catch {
+      return message.channel.send("d-doesn't look like this is a properly formed edit, please try again >_<;;");
+    }
+  }
+
 	/* message caching */
 	if (message.content == "?refreshcache") {
 		cacheRestartPrimed = true;
@@ -351,18 +530,49 @@ client.on(Events.MessageCreate, async message => {
 		}
 	}
 
-	/* >////< - misc ping easter eggs*/
+	/* :OOOO AI integration??? */
+  if (message.channel.type === 11 && message.channel.ownerId === "1340778139886031008") { //if we're in a thread created by ourselves (ai stuff :3)
+    return await handleThreadMessages(message.channel, { role: "user", content: `${message.author.globalName}: ${message.content}` });
+  }
 	if (message.content.startsWith('<@1340778139886031008>')) {
+	  //first, we wanna create a new thread - so she has all the possible context >.<
 		let pingMessage = message.content.split('>')[1];
-
-		switch (pingMessage) {
-			case '':
-				return message.channel.send('h-hai..,?');
-			case ' chu~':
-				return message.channel.send('awawawa ><');
-		}
+    if (message.channel.type === 0) { //normal text channel
+      let newMessageThread = await message.channel.threads.create({
+        name: pingMessage,
+        reason: pingMessage
+      });
+      return await handleThreadMessages(newMessageThread, { role: "user", content: `${message.author.globalName}: ${pingMessage}` }); //kills processing the message too, since we return twice~
+    }
 	}
 });
+
+let aiContext = [];
+async function handleThreadMessages(thread, message) {
+  let curThread = aiContext.findIndex(obj => obj.thread === thread); //gives us the thread index :3
+  console.log(curThread);
+
+  if (curThread !== -1) {
+    aiContext[curThread].messages.push(message);
+    console.log(aiContext[curThread].messages);
+  } else {
+    aiContext.push({ thread, messages: [message] });
+    curThread = aiContext.findIndex(obj => obj.thread === thread); //this should exist now :3
+  }
+
+  //ping endpoint for our awesome ai shit :3
+  let aiResponse = await fetch(`http://127.0.0.1:3232/v1/chat/completions`, { //should be perfectly fine, since we're using localhost here
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ messages: aiContext[curThread].messages }),
+  });
+  aiResponse = await aiResponse.json();
+
+  aiContext[curThread].messages.push(aiResponse.choices[0].message);
+  return thread.send(aiResponse.choices[0].message.content);
+}
 
 client.on(Events.MessageReactionAdd, async (reaction) => {
 	if (reaction.partial) { //sometimes discord decides to be bitchy and bratty and we need to correct it 💢
@@ -380,7 +590,7 @@ client.on(Events.MessageReactionAdd, async (reaction) => {
 });
 
 client.on(Events.InteractionCreate, async interaction => {
-  if (interaction.isButton()) { //accept/deny buttons for flanstore
+  if (interaction.isButton()) { //accept/deny buttons for flanstore + diffs
     await interaction.deferReply(); //we need to let discord know that we got their interaction, we're just gonna reply in a sec :3
     for (let i = 0; i < currentlyOpenButtons; i++) {
       if (interaction.customId === 'accept-'+i) {
@@ -393,9 +603,81 @@ client.on(Events.InteractionCreate, async interaction => {
       currentlyOpenButtons--;
       userStorage.splice(i, 1); //removes the user from storage too
     }
+
+    /* normal add diff */
+    if (interaction.customId === "accept-map-lilac") {
+      yurubridge.send(JSON.stringify({ type: "acceptMapLilac", map: curMap })); //global + only supports one map at a time, but this is assuming i'll only add one map at a time already~
+      await interaction.editReply("got it~! added map to lilac's map page >w<!!");
+    } else if (interaction.customId === "accept-map-sydney") {
+      yurubridge.send(JSON.stringify({ type: "acceptMapSydney", map: curMap }));
+      await interaction.editReply("got it~! added map to sydney's map page >w<!!");
+    } else if (interaction.customId === "edit-map") {
+      //this lets us do a lot more :O
+
+    } else if (interaction.customId === "cancel-map") {
+      await interaction.editReply("o-okay,, :c i won't do anything further with this map..,");
+    }
   }
 
-	if (!interaction.isChatInputCommand()) return; //if it's not a chat input command now, then we don't need it :3
+  /* edit diff / set */
+  if (interaction.customId === 'gds-selection') {
+    let index = interaction.values[0].split('diff-')[1]; //gives us set-diff form (0-0)
+    let setIndex = index.split('-')[0];
+    let diffIndex = index.split('-')[1];
+
+   	let diffEmbed = new EmbedBuilder()
+		.setTitle(`${curEditApiData[setIndex].songName} by ${curEditApiData[setIndex].mapper}`)
+		.setDescription(`reply with ;edit + the number of the value you want to edit + the new value you'd like to replace :3`)
+		.setColor(embedColor)
+		.setImage(curEditApiData[setIndex].bgLink)
+		.addFields(
+		  {name: 'diffname', value: curEditApiData[setIndex].difficulties[diffIndex]},
+			{name: 'sr', value: `${curEditApiData[setIndex].starRatings[diffIndex]}`}, //stupid discord.js,,
+			{name: 'amount mapped', value: curEditApiData[setIndex].amountsMapped[diffIndex]},
+			{name: 'bns', value: `${curEditApiData[setIndex].bns[0]}, ${curEditApiData[setIndex].bns[1]}`},
+		  {name: 'date finished', value: curEditApiData[setIndex].datesFinished[diffIndex]},
+			{name: 'status', value: curEditApiData[setIndex].mapStatus},
+		)
+
+    //too many options to edit here, so we'll just use custom syntax, explained above >.<
+    editDiffPrimed = true;
+    curEditDiff = curEditApiData[setIndex];
+    curEditDiffIndex = diffIndex;
+    await interaction.reply({ embeds: [diffEmbed] });
+  } else if (interaction.customId === 'sets-selection') {
+    let index = parseInt(interaction.values[0].split('set-')[1]);
+
+ 	  let setEmbed = new EmbedBuilder()
+		.setTitle(curEditApiData[index].setTitle)
+		.setColor(embedColor)
+		.setImage(curEditApiData[index].setBackgroundLink)
+		.addFields(
+		  {name: 'incomplete?', value: `${curEditApiData[index].incomplete}`}, //need to convert bool to string
+		  {name: 'description', value: curEditApiData[index].setYapping}
+		)
+
+    let editTitle = new ButtonBuilder()
+		  .setCustomId('set-edit-title')
+		  .setLabel('edit title :0')
+		  .setStyle(ButtonStyle.Secondary)
+    let editDesc = new ButtonBuilder()
+		  .setCustomId('set-edit-desc')
+		  .setLabel('edit description :0')
+		  .setStyle(ButtonStyle.Secondary)
+    let changeCompleteStatus = new ButtonBuilder()
+		  .setCustomId('set-change-status')
+		  .setLabel('change status >.<')
+		  .setStyle(ButtonStyle.Secondary)
+		let cancelButton = new ButtonBuilder()
+		  .setCustomId('cancel-set-edit')
+		  .setLabel('cancel ;w;')
+		  .setStyle(ButtonStyle.Danger)
+		let buttonRow = new ActionRowBuilder().addComponents(editTitle, editDesc, changeCompleteStatus, cancelButton);
+
+    await interaction.reply({ embeds: [setEmbed], components: [buttonRow] });
+  }
+
+	if (!interaction.isChatInputCommand()) return; //if it's not a chat input command at this point, then we don't need it :3
 	let command = interaction.client.commands.get(interaction.commandName);
 
 	if (!command) {
