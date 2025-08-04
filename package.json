@@ -1,0 +1,25 @@
+{
+  "name": "mrrpbot",
+  "version": "1.3.0",
+  "description": "our personal discord bot~",
+  "homepage": "https://github.com/sydnmc/mrrpbot#readme",
+  "bugs": {
+    "url": "https://github.com/sydnmc/mrrpbot/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sydnmc/mrrpbot.git"
+  },
+  "license": "MIT",
+  "author": "yurukyan",
+  "type": "commonsjs",
+  "main": "main.js",
+  "dependencies": {
+    "discord.js": "^14.21.0",
+    "ws": "^8.18.3",
+    "axios": "^1.11.0",
+    "form-data": "4.0.4",
+    "osu-colourizer": "^1.0.4",
+    "dotenv": "^17.2.1"
+  }
+}

@@ -1,5 +1,9 @@
 const { EmbedBuilder, SlashCommandBuilder, ModalBuilder } = require('discord.js');
-const { embedColor } = require('../config.json');
+const dotenv = require('dotenv');
+
+dotenv.config();
+
+const defaultColour = process.env.EMBED_COLOUR ?? '#7D6D78';
 
 function doDiffLogic(userInteraction, isSlash) {
   let userParams = '';

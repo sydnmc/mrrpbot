@@ -1,7 +1,6 @@
-config.json
-node_modules
-package-lock.json
-package.json
-messagecache
-usercache
+/node_modules
+/messagecache
+/usercache
+
 deployslash.js
+.env

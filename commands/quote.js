@@ -1,6 +1,8 @@
 const { EmbedBuilder, SlashCommandBuilder } = require('discord.js');
 const { readServerChannels } = require('../readchannels.js');
-const { embedColor } = require('../config.json');
+const dotenv = require('dotenv');
+
+dotenv.config();
 
 async function randomQuote(userInteraction, isSlash) {
     //new filter types: any, tomato, sob, fire, none :3
@@ -113,7 +115,7 @@ async function randomQuote(userInteraction, isSlash) {
 
     let quoteEmbed = new EmbedBuilder()
     .setTitle(quoteMessage.content)
-    .setColor(embedColor)
+    .setColor(process.env.EMBED_COLOUR ?? '#7D6D78')
     .addFields(messageFields)
     .setImage(embed)
 

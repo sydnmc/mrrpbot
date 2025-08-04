@@ -1,6 +1,10 @@
 const { EmbedBuilder, SlashCommandBuilder } = require('discord.js');
-const { embedColor } = require('../config.json');
 const fs = require('fs');
+const dotenv = require('dotenv');
+
+dotenv.config();
+
+const defaultColour = process.env.EMBED_COLOUR ?? '#7D6D78';
 
 function uploadFile(userInteraction, isSlash) {
  	let authorId;

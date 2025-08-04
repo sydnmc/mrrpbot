@@ -1,12 +1,14 @@
 const { EmbedBuilder, SlashCommandBuilder } = require('discord.js');
-const { embedColor } = require('../config.json');
+const dotenv = require('dotenv');
+
+dotenv.config();
 
 function helpMessage(channel, isSlash) {
     let helpEmbed = new EmbedBuilder()
     .setTitle('hihiii!! :D')
     .setThumbnail('https://cdn.discordapp.com/avatars/1340778139886031008/56508c96af2eb1afa323d3b87e3e7f1d') //bot pfp
     .setDescription('im sydneys bot that can help with various things >w<\nheres a list of all the commands that i have so far,,')
-    .setColor(embedColor)
+    .setColor(process.env.EMBED_COLOUR ?? '#7D6D78')
     .addFields(
         {name: '?help', value: 'displays this message!! :3 \nthese are all the commands i know >_<'},
         {name: '?front ``name``', value: 'displays whos fronting :3 \ncan accept a username, server nickname, or @ing someone'},

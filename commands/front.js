@@ -1,5 +1,9 @@
 const { EmbedBuilder, SlashCommandBuilder, MessageFlags } = require('discord.js');
-const { embedColor } = require('../config.json');
+const dotenv = require('dotenv');
+
+dotenv.config();
+
+const defaultColour = process.env.EMBED_COLOUR ?? '#7D6D78';
 
 async function getFronter(userId) {
     let res = await fetch(`https://api.pluralkit.me/v2/systems/${userId}/fronters`);
@@ -98,7 +102,7 @@ async function frontHandler(userInteraction, isSlash) {
 
     description = description + `been fronting since ${hoursSinceFront} hours, ${minutesSinceFront} minutes ago >w<`;
 
-    let sidebarColor = embedColor;
+    let sidebarColor = defaultColour;
 
     try {
         sidebarColor = curFronter.members[0].color;

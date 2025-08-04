@@ -9,15 +9,11 @@ const serverConnections = [
 
 /* things used to download files in order to send them to flanstore~ */
 const axios = require('axios');
-const FormData = require('form-data');
-const { Readable } = require('stream');
 const flanstoreEndpoint = 'http://localhost:1402'; //since we're running on the same server~
 
 /* discord.js imports */
 const { Client, Events, GatewayIntentBits, Partials, Collection, EmbedBuilder, MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder } = require('discord.js');
-const fs = require('fs');
 
-const { token, embedColor, cacheWriteFrequency } = require('./config.json');
 const { frontHandler } = require('./commands/front.js');
 const { remind } = require('./commands/remind.js');
 const { meowHandler } = require('./meowhandler.js');
@@ -27,6 +23,14 @@ const { helpMessage } = require('./commands/help.js');
 const { uploadFile } = require('./commands/upload.js');
 const { doDiffLogic, addDiff } = require('./commands/diff.js');
 
+//import { colourizeHex } from 'osu-colourizer'; //used for map related things~
+const fs = require('node:fs');
+const dotenv = require('dotenv');
+
+dotenv.config();
+
+const defaultColour = process.env.EMBED_COLOUR ?? '#7D6D78';
+console.log(defaultColour);
 
 const client = new Client({
     intents: [
@@ -41,7 +45,6 @@ const client = new Client({
 });
 
 var cacheRestartPrimed = false;
-var editDiffPrimed = false;
 
 client.commands = new Collection();
 
@@ -157,7 +160,7 @@ function updateCacheWhileRunning(message, isReaction, emoji) {
 				console.log(`updated cache for ${message.guild.name}'s #${message.channel.name} with new messages >w<`);
 			});
 			delete messagesToWrite[message.channel.id]; //removes the channel from messagesToWrite, effectively resetting it
-		}, cacheWriteFrequency); //runs every 60 seconds by default
+		}, process.env.CACHE_WRITE_FREQUENCY? parseInt(process.env.CACHE_WRITE_FREQUENCY) : 60000); //runs every 60 seconds by default
 	} else {
 		if (isReaction) {
 			messagesToWrite[message.channel.id].forEach(entry => {
@@ -231,8 +234,6 @@ client.once(Events.ClientReady, readyClient => {
 
 var curMap = {};
 var curEditApiData = [];
-var curEditDiff = {};
-var curEditDiffIndex;
 
 function followupYuruMessage(diffChannel) {
   yurubridge.on('message', message => {
@@ -241,7 +242,7 @@ function followupYuruMessage(diffChannel) {
     let colour;
     if (!parsedMessage.diffname) { //we also don't have a diff colour if this is the case~
       diffname = 'not set yet >_<;;';
-      colour = embedColor; //stupid sydney with color and not colour,,
+      colour = '#ffffff';
     } else {
       diffname = `${parsedMessage.diffname} (${parsedMessage.sr} stars)`;
       colour = parsedMessage.colour;
@@ -287,15 +288,15 @@ function followupEditYuruMessage(channel, siteInfo, type, page) {
   let options = [];
   for (let i = 0; i < siteInfo.length; i++) {
     if (type === "gds") {
-      for (let j = 0; j < siteInfo[i].difficulties.length; j++) { //we can have multiple difficulties in one map~
+      for (let j = 0; j < siteInfo[i].maps.length; j++) { //we can have multiple difficulties in one map~
         options.push(new StringSelectMenuOptionBuilder()
-          .setLabel(`${siteInfo[i].songName} by ${siteInfo[i].mapper}`)
-          .setDescription(`${siteInfo[i].diffname}`) //needs a string here
+          .setLabel(`${siteInfo[i].artist} - ${siteInfo[i].title} by ${siteInfo[i].creator}`)
+          .setDescription(`${siteInfo[i].maps[j].diffname}`) //needs a string here
           .setValue(`diff-${i}-${j}`))
       }
     } else if (type === "sets") {
       options.push(new StringSelectMenuOptionBuilder()
-        .setLabel(`${siteInfo[i].setTitle}`)
+        .setLabel(`${siteInfo[i].artist} - ${siteInfo[i].title}`)
         .setValue(`set-${i}`))
     }
   }
@@ -413,7 +414,7 @@ client.on(Events.MessageCreate, async message => {
         yurubridge.send(JSON.stringify({ "link": setLink, "type": "set" }));
         followupYuruMessage(message.channel);
         return;
-      } else if (userParams.startsWith('diffedit')) { //each of these should grab their respective info from api.yuru.ca :3
+      } else if (userParams.startsWith('diffedit')) {
         let siteInfo;
         if (userParams.includes('lilac') || userParams.includes('sydney')) {
           let person;
@@ -454,23 +455,6 @@ client.on(Events.MessageCreate, async message => {
       return message.channel.send(`i'm sorry, but,, i don't trust you to edit things on yuru.ca >.< only lilac and sydney can,, >_<;;`);
     }
 	}
-
-  if (editDiffPrimed && message.author.id === "245588170903781377" && message.content.startsWith(';edit')) {
-    //let's enter edit mode~ :D
-    try {
-      let userParams = message.content.split(';edit ')[1];
-      let editNum = parseInt(userParams.split(' ')[0]);
-      let editValue = userParams.split(' ')[1];
-
-      switch (editNum) {
-        case 1:
-          curEditDiff.difficulties[curEditDiffIndex] = editValue;
-          break;
-      }
-    } catch {
-      return message.channel.send("d-doesn't look like this is a properly formed edit, please try again >_<;;");
-    }
-  }
 
 	/* message caching */
 	if (message.content == "?refreshcache") {
@@ -519,7 +503,7 @@ client.on(Events.MessageCreate, async message => {
 
 			let fireEmbed = new EmbedBuilder()
 			.setTitle(msgContent)
-			.setColor(embedColor)
+			.setColor(defaultColour)
 			.setImage(fireMessages[i].attachmentUrl)
 			.addFields(
 				{name: '', value: `🔥 ${fireMessages[i].fireReacts}`, inline: true},
@@ -624,32 +608,53 @@ client.on(Events.InteractionCreate, async interaction => {
     let index = interaction.values[0].split('diff-')[1]; //gives us set-diff form (0-0)
     let setIndex = index.split('-')[0];
     let diffIndex = index.split('-')[1];
+	let bnString = curEditApiData[setIndex].bns[0] ?? '(none)';
+
+	for (let i = 1; i < curEditApiData[setIndex].bns.length; i++) { //if we have more than 1 bn~
+		bnString = bnString+`, ${curEditApiData[setIndex].bns[i]}`;
+	}
 
    	let diffEmbed = new EmbedBuilder()
-		.setTitle(`${curEditApiData[setIndex].songName} by ${curEditApiData[setIndex].mapper}`)
-		.setDescription(`reply with ;edit + the number of the value you want to edit + the new value you'd like to replace :3`)
-		.setColor(embedColor)
+		.setTitle(`${curEditApiData[setIndex].artist} - ${curEditApiData[setIndex].title} by ${curEditApiData[setIndex].creator}`)
+		.setColor(defaultColour)
+		.setDescription('only some of the properties are displayed here, as the others will be automatically updated later~')
 		.setImage(curEditApiData[setIndex].bgLink)
 		.addFields(
-		  {name: 'diffname', value: curEditApiData[setIndex].difficulties[diffIndex]},
-			{name: 'sr', value: `${curEditApiData[setIndex].starRatings[diffIndex]}`}, //stupid discord.js,,
-			{name: 'amount mapped', value: curEditApiData[setIndex].amountsMapped[diffIndex]},
-			{name: 'bns', value: `${curEditApiData[setIndex].bns[0]}, ${curEditApiData[setIndex].bns[1]}`},
-		  {name: 'date finished', value: curEditApiData[setIndex].datesFinished[diffIndex]},
-			{name: 'status', value: curEditApiData[setIndex].mapStatus},
+			{name: 'amount mapped', value: curEditApiData[setIndex].maps[diffIndex].amountMapped},
+			{name: 'date finished', value: curEditApiData[setIndex].maps[diffIndex].dateFinished},
+			{name: 'bns', value: bnString},
+			{name: 'status', value: curEditApiData[setIndex].status}
 		)
 
-    //too many options to edit here, so we'll just use custom syntax, explained above >.<
-    editDiffPrimed = true;
-    curEditDiff = curEditApiData[setIndex];
-    curEditDiffIndex = diffIndex;
-    await interaction.reply({ embeds: [diffEmbed] });
+	let editAmountMapped = new ButtonBuilder()
+		.setCustomId('diff-edit-title')
+		.setLabel('edit title :0')
+		.setStyle(ButtonStyle.Secondary)
+    let editDateFinished = new ButtonBuilder()
+		.setCustomId('diff-edit-desc')
+		.setLabel('edit description :0')
+		.setStyle(ButtonStyle.Secondary)
+    let editBns = new ButtonBuilder()
+		.setCustomId('diff-edit-bns')
+		.setLabel('edit bns :0')
+		.setStyle(ButtonStyle.Secondary)
+	let changeStatus = new ButtonBuilder()
+		.setCustomId('diff-change-status')
+		.setLabel('change status >.<')
+		.setStyle(ButtonStyle.Secondary)
+	let cancelButton = new ButtonBuilder()
+		.setCustomId('cancel-diff-edit')
+		.setLabel('cancel ;w;')
+		.setStyle(ButtonStyle.Danger)
+	let buttonRow = new ActionRowBuilder().addComponents(editAmountMapped, editDateFinished, editBns, changeStatus, cancelButton);
+
+   	await interaction.reply({ embeds: [diffEmbed], components: [buttonRow] });
   } else if (interaction.customId === 'sets-selection') {
     let index = parseInt(interaction.values[0].split('set-')[1]);
 
  	  let setEmbed = new EmbedBuilder()
 		.setTitle(curEditApiData[index].setTitle)
-		.setColor(embedColor)
+		.setColor(defaultColour)
 		.setImage(curEditApiData[index].setBackgroundLink)
 		.addFields(
 		  {name: 'incomplete?', value: `${curEditApiData[index].incomplete}`}, //need to convert bool to string
@@ -668,11 +673,11 @@ client.on(Events.InteractionCreate, async interaction => {
 		  .setCustomId('set-change-status')
 		  .setLabel('change status >.<')
 		  .setStyle(ButtonStyle.Secondary)
-		let cancelButton = new ButtonBuilder()
+	let cancelButton = new ButtonBuilder()
 		  .setCustomId('cancel-set-edit')
 		  .setLabel('cancel ;w;')
 		  .setStyle(ButtonStyle.Danger)
-		let buttonRow = new ActionRowBuilder().addComponents(editTitle, editDesc, changeCompleteStatus, cancelButton);
+	let buttonRow = new ActionRowBuilder().addComponents(editTitle, editDesc, changeCompleteStatus, cancelButton);
 
     await interaction.reply({ embeds: [setEmbed], components: [buttonRow] });
   }
@@ -695,4 +700,4 @@ client.on(Events.InteractionCreate, async interaction => {
 	}
 });
 
-client.login(token);
+client.login(process.env.TOKEN);
