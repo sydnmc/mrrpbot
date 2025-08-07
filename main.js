@@ -5,10 +5,6 @@ const serverConnections = [
   { "name": "flanbridge", "socketData": flanbridge }
 ];
 
-/* things used to download files in order to send them to flanstore~ */
-const axios = require('axios');
-const flanstoreEndpoint = 'http://localhost:1402'; //since we're running on the same server~
-
 /* discord.js imports */
 const { Client, Events, GatewayIntentBits, Partials, Collection, EmbedBuilder, MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder } = require('discord.js');
 
