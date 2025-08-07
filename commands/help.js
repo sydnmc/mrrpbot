@@ -12,10 +12,8 @@ function helpMessage(channel, isSlash) {
     .addFields(
         {name: '?help', value: 'displays this message!! :3 \nthese are all the commands i know >_<'},
         {name: '?front ``name``', value: 'displays whos fronting :3 \ncan accept a username, server nickname, or @ing someone'},
-        {name: '?quote ``unfiltered`` ``name``', value: 'pulls a random quote from the current server~ >w<\n``unfiltered`` searches for messages with/without 🔥 reacts :3\n``name`` is the name of the person you want to quote~ >w<\nboth of these can be blank, tho~'},
-        {name: '?remind ``time`` ``reminder``', value: 'reminds you of something whenever you want >:3\n``time`` takes any input you can think of for time :O\n``reminder`` is the message you want to be reminded of~'}
+        {name: '?quote ``unfiltered`` ``name``', value: 'pulls a random quote from the current server~ >w<\n``unfiltered`` searches for messages with/without 🔥 reacts :3\n``name`` is the name of the person you want to quote~ >w<\nboth of these can be blank, tho~'}
     )
-    .setFooter({text: 'go follow my wife @catgirlflowers on twitter >_<;;'})
     
     let returnText = { embeds: [helpEmbed] }
     if (!isSlash) {
